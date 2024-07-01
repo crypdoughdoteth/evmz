@@ -1,4 +1,4 @@
-const Stack = @import("./stack.zig");
+const Stack = @import("./Stack.zig");
 const std = @import("std");
 
 pub const Opcode = enum(u8) {
@@ -13,4 +13,5 @@ pub const Opcode = enum(u8) {
     addmod = 0x08,
     mulmod = 0x09,
     exp = 0x0A,
+    signextend = 0x0B,
 };
