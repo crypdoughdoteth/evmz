@@ -2,7 +2,7 @@ const std = @import("std");
 const opcodes = @import("opcodes.zig");
 const Opcode = opcodes.Opcode;
 const Stack = @import("Stack.zig");
-const Evm = Stack.Evm;
+const Evm = @import("./Evm.zig");
 
 pub fn main() !void {
     var stack: Stack = .{};
