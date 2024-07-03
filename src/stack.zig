@@ -12,14 +12,6 @@ fn get(self: *const Stack, idx: usize) ?u256 {
     return self.stack[idx];
 }
 
-fn top(self: *const Stack) ?u256 {
-    if (self.length == 0) {
-        return null;
-    } else {
-        return self.stack.free_slot - 1;
-    }
-}
-
 fn push(self: *Stack, val: u256) StackError!void {
     if (self.length >= STACK_SIZE) {
         return StackError.StackFull;
@@ -39,7 +31,8 @@ fn pop(self: *Stack) StackError!u256 {
     return res;
 }
 
-fn last(self: *const Stack) ?u256 {
+// top value on stack
+fn top(self: *const Stack) ?u256 {
     if (self.length == 0) {
         return null;
     }
@@ -69,6 +62,7 @@ pub const Evm = struct {
         }
     }
 
+    // ARITHMETIC OPS: 0x00 - 0x0B
     fn add(evm: *Evm) !void {
         const free_ptr = evm.stack.length;
         if (free_ptr <= 1) return error.StackUnderflow;
@@ -242,7 +236,7 @@ pub const Evm = struct {
         _ = try evm.stack.pop();
         var result: u256 = 0;
         if (bits <= 31) {
-            const testbit: u8 = @intCast(bits * 8 + 7);
+            const testbit: u8 = @truncate(bits * 8 + 7);
             const sign_bit: u256 = @as(u256, 1) << testbit;
             if ((value & sign_bit) != 0) {
                 result = value | (std.math.maxInt(u256) - sign_bit);
@@ -254,6 +248,248 @@ pub const Evm = struct {
         }
         evm.stack.stack[free_ptr - 1] = result;
     }
+
+    // COMPARISON OPS: 0x10 - 0x1D
+
+    fn lt(evm: *Evm) !void {
+        const free_ptr = evm.stack.length;
+        if (free_ptr <= 1) return OpcodeErrors.StackUnderflow;
+
+        const one = evm.stack.stack[free_ptr - 1];
+        const two = evm.stack.stack[free_ptr - 2];
+
+        _ = try evm.stack.pop();
+
+        // this is correct because pop will bump the free slot back by one
+        // stack shrinks by one
+        // bottom value overwritten
+
+        if (one < two) {
+            evm.stack.stack[free_ptr - 1] = 1;
+        } else {
+            evm.stack.stack[free_ptr - 1] = 0;
+        }
+    }
+
+    fn gt(evm: *Evm) !void {
+        const free_ptr = evm.stack.length;
+        if (free_ptr <= 1) return OpcodeErrors.StackUnderflow;
+
+        const one = evm.stack.stack[free_ptr - 1];
+        const two = evm.stack.stack[free_ptr - 2];
+
+        _ = try evm.stack.pop();
+
+        // this is correct because pop will bump the free slot back by one
+        // stack shrinks by one
+        // bottom value overwritten
+
+        if (one > two) {
+            evm.stack.stack[free_ptr - 1] = 1;
+        } else {
+            evm.stack.stack[free_ptr - 1] = 0;
+        }
+    }
+
+    fn slt(evm: *Evm) !void {
+        const free_ptr = evm.stack.length;
+        if (free_ptr <= 1) return OpcodeErrors.StackUnderflow;
+
+        const one = evm.stack.stack[free_ptr - 1];
+        const two = evm.stack.stack[free_ptr - 2];
+
+        _ = try evm.stack.pop();
+
+        // this is correct because pop will bump the free slot back by one
+        // stack shrinks by one
+        // bottom value overwritten
+        if (@bitCast(@as(i256, @bitCast(one)) < @as(i256, @bitCast(two)))) {
+            evm.stack.stack[free_ptr - 1] = 1;
+        } else {
+            evm.stack.stack[free_ptr - 1] = 0;
+        }
+    }
+
+    fn sgt(evm: *Evm) !void {
+        const free_ptr = evm.stack.length;
+        if (free_ptr <= 1) return OpcodeErrors.StackUnderflow;
+
+        const one = evm.stack.stack[free_ptr - 1];
+        const two = evm.stack.stack[free_ptr - 2];
+
+        _ = try evm.stack.pop();
+
+        // this is correct because pop will bump the free slot back by one
+        // stack shrinks by one
+        // bottom value overwritten
+        if (@bitCast(@as(i256, @bitCast(one)) > @as(i256, @bitCast(two)))) {
+            evm.stack.stack[free_ptr - 1] = 1;
+        } else {
+            evm.stack.stack[free_ptr - 1] = 0;
+        }
+    }
+
+    fn eq(evm: *Evm) !void {
+        const free_ptr = evm.stack.length;
+        if (free_ptr <= 1) return OpcodeErrors.StackUnderflow;
+
+        const one = evm.stack.stack[free_ptr - 1];
+        const two = evm.stack.stack[free_ptr - 2];
+
+        _ = try evm.stack.pop();
+
+        // this is correct because pop will bump the free slot back by one
+        // stack shrinks by one
+        // bottom value overwritten
+        if (one == two) {
+            evm.stack.stack[free_ptr - 1] = 1;
+        } else {
+            evm.stack.stack[free_ptr - 1] = 0;
+        }
+    }
+
+    fn iszero(evm: *Evm) !void {
+        const free_ptr = evm.stack.length;
+        if (free_ptr == 0) return OpcodeErrors.StackUnderflow;
+
+        const one = evm.stack.stack[free_ptr - 1];
+
+        // this is correct because pop will bump the free slot back by one
+        // stack shrinks by one
+        // bottom value overwritten
+        if (one == 0) {
+            evm.stack.stack[free_ptr - 1] = 1;
+        } else {
+            evm.stack.stack[free_ptr - 1] = 0;
+        }
+    }
+
+    fn _and(evm: *Evm) !void {
+        const free_ptr = evm.stack.length;
+        if (free_ptr <= 1) return OpcodeErrors.StackUnderflow;
+
+        const one = evm.stack.stack[free_ptr - 1];
+        const two = evm.stack.stack[free_ptr - 2];
+
+        _ = try evm.stack.pop();
+
+        // this is correct because pop will bump the free slot back by one
+        // stack shrinks by one
+        // bottom value overwritten
+
+        evm.stack.stack[free_ptr - 1] = one & two;
+    }
+
+    fn _or(evm: *Evm) !void {
+        const free_ptr = evm.stack.length;
+        if (free_ptr <= 1) return OpcodeErrors.StackUnderflow;
+
+        const one = evm.stack.stack[free_ptr - 1];
+        const two = evm.stack.stack[free_ptr - 2];
+
+        _ = try evm.stack.pop();
+
+        // this is correct because pop will bump the free slot back by one
+        // stack shrinks by one
+        // bottom value overwritten
+
+        evm.stack.stack[free_ptr - 1] = one | two;
+    }
+
+    fn xor(evm: *Evm) !void {
+        const free_ptr = evm.stack.length;
+        if (free_ptr <= 1) return OpcodeErrors.StackUnderflow;
+
+        const one = evm.stack.stack[free_ptr - 1];
+        const two = evm.stack.stack[free_ptr - 2];
+
+        _ = try evm.stack.pop();
+
+        // this is correct because pop will bump the free slot back by one
+        // stack shrinks by one
+        // bottom value overwritten
+
+        evm.stack.stack[free_ptr - 1] = one ^ two;
+    }
+
+    fn not(evm: *Evm) !void {
+        const free_ptr = evm.stack.length;
+        if (free_ptr <= 1) return OpcodeErrors.StackUnderflow;
+
+        const one = evm.stack.stack[free_ptr - 1];
+
+        // this is correct because pop will bump the free slot back by one
+        // stack shrinks by one
+        // bottom value overwritten
+
+        evm.stack.stack[free_ptr - 1] = ~one;
+    }
+
+    fn byte(evm: *Evm) !void {
+        const free_ptr = evm.stack.length;
+        if (free_ptr <= 1) return OpcodeErrors.StackUnderflow;
+
+        const pos = evm.stack.stack[free_ptr - 1];
+        const val = evm.stack.stack[free_ptr - 2];
+
+        _ = try evm.stack.pop();
+
+        // this is correct because pop will bump the free slot back by one
+        // stack shrinks by one
+        // bottom value overwritten
+
+        if (pos >= 32) {
+            evm.stack.stack[free_ptr - 1] = 0;
+        } else {
+            evm.stack.stack[free_ptr - 1] = (val / std.math.pow(u256, 256, 31 - pos)) % 256;
+        }
+    }
+
+    fn shl(evm: *Evm) !void {
+        const free_ptr = evm.stack.length;
+        if (free_ptr <= 1) return OpcodeErrors.StackUnderflow;
+
+        const len = evm.stack.stack[free_ptr - 1];
+        const val = evm.stack.stack[free_ptr - 2];
+
+        _ = try evm.stack.pop();
+
+        // this is correct because pop will bump the free slot back by one
+        // stack shrinks by one
+        // bottom value overwritten
+
+        evm.stack.stack[free_ptr - 1] = (val << @truncate(len)) & std.math.maxInt(u256);
+    }
+    fn shr(evm: *Evm) !void {
+        const free_ptr = evm.stack.length;
+        if (free_ptr <= 1) return OpcodeErrors.StackUnderflow;
+
+        const len = evm.stack.stack[free_ptr - 1];
+        const val = evm.stack.stack[free_ptr - 2];
+
+        _ = try evm.stack.pop();
+
+        // this is correct because pop will bump the free slot back by one
+        // stack shrinks by one
+        // bottom value overwritten
+
+        evm.stack.stack[free_ptr - 1] = (val >> @truncate(len)) & std.math.maxInt(u256);
+    }
+
+    fn sar(evm: *Evm) !void {
+        const free_ptr = evm.stack.length;
+        if (free_ptr <= 1) return OpcodeErrors.StackUnderflow;
+
+        const len = evm.stack.stack[free_ptr - 1];
+        const val = evm.stack.stack[free_ptr - 2];
+
+        _ = try evm.stack.pop();
+
+        evm.stack.stack[free_ptr - 1] = @as(u256, @bitCast(@as(i256, @bitCast(len)) >> @truncate(val))) & std.math.maxInt(u256);
+    }
+
+    // Crypto: 0x20
+    // Keccak256
 };
 
 const OpcodeErrors = error{
