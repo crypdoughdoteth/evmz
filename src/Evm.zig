@@ -1,15 +1,21 @@
 const Stack = @import("Stack.zig");
+const Gas = @import("Gas.zig");
 const opcodes = @import("opcodes.zig");
 const Opcode = opcodes.Opcode;
 const Evm = @This();
 const std = @import("std");
 
+// limits must be imposed by constraining `starting_gas` field of Gas.
+// This is intentional. Starting gas may never exceed a given gas limit anyway.
+
 program_counter: u32,
 stack: *Stack,
+gas: *Gas,
 success: bool,
 pub fn exec(self: *Evm, code: []const u8) !void {
     while (true) : (self.program_counter += 1) {
         const opcode: Opcode = @enumFromInt(code[self.program_counter]);
+
         switch (opcode) {
             .stop => {
                 self.success = true;
@@ -26,8 +32,11 @@ fn add(evm: *Evm) !void {
     const free_ptr = evm.stack.length;
     if (free_ptr <= 1) return error.StackUnderflow;
 
+    try evm.gas.consumeGas(3);
+
     const one = evm.stack.stack[free_ptr - 1];
     const two = evm.stack.stack[free_ptr - 2];
+
     _ = try evm.stack.pop();
     // this is correct because pop will bump the free slot back by one
     // stack shrinks by one
@@ -38,6 +47,7 @@ fn add(evm: *Evm) !void {
 fn mul(evm: *Evm) !void {
     const free_ptr = evm.stack.length;
     if (free_ptr <= 1) return OpcodeErrors.StackUnderflow;
+    try evm.gas.consumeGas(5);
 
     const one = evm.stack.stack[free_ptr - 1];
     const two = evm.stack.stack[free_ptr - 2];
@@ -51,6 +61,7 @@ fn mul(evm: *Evm) !void {
 fn sub(evm: *Evm) !void {
     const free_ptr = evm.stack.length;
     if (free_ptr <= 1) return OpcodeErrors.StackUnderflow;
+    try evm.gas.consumeGas(3);
 
     const one = evm.stack.stack[free_ptr - 1];
     const two = evm.stack.stack[free_ptr - 2];
@@ -64,6 +75,7 @@ fn sub(evm: *Evm) !void {
 fn div(evm: *Evm) !void {
     const free_ptr = evm.stack.length;
     if (free_ptr <= 1) return OpcodeErrors.StackUnderflow;
+    try evm.gas.consumeGas(5);
 
     const one = evm.stack.stack[free_ptr - 1];
     const two = evm.stack.stack[free_ptr - 2];
@@ -81,6 +93,7 @@ fn div(evm: *Evm) !void {
 fn sdiv(evm: *Evm) !void {
     const free_ptr = evm.stack.length;
     if (free_ptr <= 1) return OpcodeErrors.StackUnderflow;
+    try evm.gas.consumeGas(5);
 
     const one = evm.stack.stack[free_ptr - 1];
     const two = evm.stack.stack[free_ptr - 2];
@@ -99,6 +112,7 @@ fn sdiv(evm: *Evm) !void {
 fn mod(evm: *Evm) !void {
     const free_ptr = evm.stack.length;
     if (free_ptr <= 1) return OpcodeErrors.StackUnderflow;
+    try evm.gas.consumeGas(5);
 
     const one = evm.stack.stack[free_ptr - 1];
     const two = evm.stack.stack[free_ptr - 2];
@@ -117,6 +131,7 @@ fn mod(evm: *Evm) !void {
 fn smod(evm: *Evm) !void {
     const free_ptr = evm.stack.length;
     if (free_ptr <= 1) return OpcodeErrors.StackUnderflow;
+    try evm.gas.consumeGas(5);
 
     const one = evm.stack.stack[free_ptr - 1];
     const two = evm.stack.stack[free_ptr - 2];
@@ -135,6 +150,7 @@ fn smod(evm: *Evm) !void {
 fn addmod(evm: *Evm) !void {
     const free_ptr = evm.stack.length;
     if (free_ptr <= 2) return OpcodeErrors.StackUnderflow;
+    try evm.gas.consumeGas(8);
 
     const one = evm.stack.stack[free_ptr - 1];
     const two = evm.stack.stack[free_ptr - 2];
@@ -156,6 +172,7 @@ fn addmod(evm: *Evm) !void {
 fn mulmod(evm: *Evm) !void {
     const free_ptr = evm.stack.length;
     if (free_ptr <= 2) return OpcodeErrors.StackUnderflow;
+    try evm.gas.consumeGas(8);
 
     const one = evm.stack.stack[free_ptr - 1];
     const two = evm.stack.stack[free_ptr - 2];
@@ -177,6 +194,75 @@ fn exp(evm: *Evm) !void {
     const one = evm.stack.stack[free_ptr - 1];
     const two = evm.stack.stack[free_ptr - 2];
 
+    // is there a better way !?
+    // there has to be ... right?
+    // this is accurate as far as the spec goes, but...
+    if (two <= std.math.maxInt(u8)) {
+        try evm.gas.consumeGas(10 + (50 * @sizeOf(u8)));
+    } else if (two <= std.math.maxInt(u16)) {
+        try evm.gas.consumeGas(10 + (50 * @sizeOf(u16)));
+    } else if (two <= std.math.maxInt(u24)) {
+        try evm.gas.consumeGas(10 + (50 * @sizeOf(u24)));
+    } else if (two <= std.math.maxInt(u32)) {
+        try evm.gas.consumeGas(10 + (50 * @sizeOf(u32)));
+    } else if (two <= std.math.maxInt(u40)) {
+        try evm.gas.consumeGas(10 + (50 * @sizeOf(u40)));
+    } else if (two <= std.math.maxInt(u48)) {
+        try evm.gas.consumeGas(10 + (50 * @sizeOf(u48)));
+    } else if (two <= std.math.maxInt(u56)) {
+        try evm.gas.consumeGas(10 + (50 * @sizeOf(u56)));
+    } else if (two <= std.math.maxInt(u64)) {
+        try evm.gas.consumeGas(10 + (50 * @sizeOf(u64)));
+    } else if (two <= std.math.maxInt(u72)) {
+        try evm.gas.consumeGas(10 + (50 * @sizeOf(u72)));
+    } else if (two <= std.math.maxInt(u80)) {
+        try evm.gas.consumeGas(10 + (50 * @sizeOf(u80)));
+    } else if (two <= std.math.maxInt(u88)) {
+        try evm.gas.consumeGas(10 + (50 * @sizeOf(u88)));
+    } else if (two <= std.math.maxInt(u96)) {
+        try evm.gas.consumeGas(10 + (50 * @sizeOf(u96)));
+    } else if (two <= std.math.maxInt(u104)) {
+        try evm.gas.consumeGas(10 + (50 * @sizeOf(u104)));
+    } else if (two <= std.math.maxInt(u112)) {
+        try evm.gas.consumeGas(10 + (50 * @sizeOf(u112)));
+    } else if (two <= std.math.maxInt(u120)) {
+        try evm.gas.consumeGas(10 + (50 * @sizeOf(u120)));
+    } else if (two <= std.math.maxInt(u128)) {
+        try evm.gas.consumeGas(10 + (50 * @sizeOf(u128)));
+    } else if (two <= std.math.maxInt(u136)) {
+        try evm.gas.consumeGas(10 + (50 * @sizeOf(u136)));
+    } else if (two <= std.math.maxInt(u144)) {
+        try evm.gas.consumeGas(10 + (50 * @sizeOf(u144)));
+    } else if (two <= std.math.maxInt(u152)) {
+        try evm.gas.consumeGas(10 + (50 * @sizeOf(u152)));
+    } else if (two <= std.math.maxInt(u160)) {
+        try evm.gas.consumeGas(10 + (50 * @sizeOf(u160)));
+    } else if (two <= std.math.maxInt(u168)) {
+        try evm.gas.consumeGas(10 + (50 * @sizeOf(u168)));
+    } else if (two <= std.math.maxInt(u176)) {
+        try evm.gas.consumeGas(10 + (50 * @sizeOf(u176)));
+    } else if (two <= std.math.maxInt(u184)) {
+        try evm.gas.consumeGas(10 + (50 * @sizeOf(u184)));
+    } else if (two <= std.math.maxInt(u192)) {
+        try evm.gas.consumeGas(10 + (50 * @sizeOf(u192)));
+    } else if (two <= std.math.maxInt(u200)) {
+        try evm.gas.consumeGas(10 + (50 * @sizeOf(u200)));
+    } else if (two <= std.math.maxInt(u208)) {
+        try evm.gas.consumeGas(10 + (50 * @sizeOf(u208)));
+    } else if (two <= std.math.maxInt(u216)) {
+        try evm.gas.consumeGas(10 + (50 * @sizeOf(u216)));
+    } else if (two <= std.math.maxInt(u224)) {
+        try evm.gas.consumeGas(10 + (50 * @sizeOf(u224)));
+    } else if (two <= std.math.maxInt(u232)) {
+        try evm.gas.consumeGas(10 + (50 * @sizeOf(u232)));
+    } else if (two <= std.math.maxInt(u240)) {
+        try evm.gas.consumeGas(10 + (50 * @sizeOf(u240)));
+    } else if (two <= std.math.maxInt(u248)) {
+        try evm.gas.consumeGas(10 + (50 * @sizeOf(u248)));
+    } else if (two <= std.math.maxInt(u256)) {
+        try evm.gas.consumeGas(10 + (50 * @sizeOf(u256)));
+    }
+
     _ = try evm.stack.pop();
 
     // this is correct because pop will bump the free slot back by one
@@ -189,6 +275,7 @@ fn exp(evm: *Evm) !void {
 fn signextend(evm: *Evm) !void {
     const free_ptr = evm.stack.length;
     if (free_ptr <= 1) return OpcodeErrors.StackUnderflow;
+    try evm.gas.consumeGas(5);
 
     const bits = evm.stack.stack[free_ptr - 1];
     const value = evm.stack.stack[free_ptr - 2];
@@ -213,6 +300,7 @@ fn signextend(evm: *Evm) !void {
 fn lt(evm: *Evm) !void {
     const free_ptr = evm.stack.length;
     if (free_ptr <= 1) return OpcodeErrors.StackUnderflow;
+    try evm.gas.consumeGas(3);
 
     const one = evm.stack.stack[free_ptr - 1];
     const two = evm.stack.stack[free_ptr - 2];
@@ -253,6 +341,7 @@ fn gt(evm: *Evm) !void {
 fn slt(evm: *Evm) !void {
     const free_ptr = evm.stack.length;
     if (free_ptr <= 1) return OpcodeErrors.StackUnderflow;
+    try evm.gas.consumeGas(3);
 
     const one = evm.stack.stack[free_ptr - 1];
     const two = evm.stack.stack[free_ptr - 2];
@@ -291,6 +380,7 @@ fn sgt(evm: *Evm) !void {
 fn eq(evm: *Evm) !void {
     const free_ptr = evm.stack.length;
     if (free_ptr <= 1) return OpcodeErrors.StackUnderflow;
+    try evm.gas.consumeGas(3);
 
     const one = evm.stack.stack[free_ptr - 1];
     const two = evm.stack.stack[free_ptr - 2];
@@ -310,6 +400,7 @@ fn eq(evm: *Evm) !void {
 fn iszero(evm: *Evm) !void {
     const free_ptr = evm.stack.length;
     if (free_ptr == 0) return OpcodeErrors.StackUnderflow;
+    try evm.gas.consumeGas(3);
 
     const one = evm.stack.stack[free_ptr - 1];
 
@@ -323,6 +414,7 @@ fn iszero(evm: *Evm) !void {
 fn _and(evm: *Evm) !void {
     const free_ptr = evm.stack.length;
     if (free_ptr <= 1) return OpcodeErrors.StackUnderflow;
+    try evm.gas.consumeGas(3);
 
     const one = evm.stack.stack[free_ptr - 1];
     const two = evm.stack.stack[free_ptr - 2];
@@ -339,6 +431,7 @@ fn _and(evm: *Evm) !void {
 fn _or(evm: *Evm) !void {
     const free_ptr = evm.stack.length;
     if (free_ptr <= 1) return OpcodeErrors.StackUnderflow;
+    try evm.gas.consumeGas(3);
 
     const one = evm.stack.stack[free_ptr - 1];
     const two = evm.stack.stack[free_ptr - 2];
@@ -355,6 +448,7 @@ fn _or(evm: *Evm) !void {
 fn xor(evm: *Evm) !void {
     const free_ptr = evm.stack.length;
     if (free_ptr <= 1) return OpcodeErrors.StackUnderflow;
+    try evm.gas.consumeGas(3);
 
     const one = evm.stack.stack[free_ptr - 1];
     const two = evm.stack.stack[free_ptr - 2];
@@ -371,6 +465,7 @@ fn xor(evm: *Evm) !void {
 fn not(evm: *Evm) !void {
     const free_ptr = evm.stack.length;
     if (free_ptr <= 1) return OpcodeErrors.StackUnderflow;
+    try evm.gas.consumeGas(3);
 
     const one = evm.stack.stack[free_ptr - 1];
 
@@ -380,6 +475,7 @@ fn not(evm: *Evm) !void {
 fn byte(evm: *Evm) !void {
     const free_ptr = evm.stack.length;
     if (free_ptr <= 1) return OpcodeErrors.StackUnderflow;
+    try evm.gas.consumeGas(3);
 
     const pos = evm.stack.stack[free_ptr - 1];
     const val = evm.stack.stack[free_ptr - 2];
@@ -400,6 +496,7 @@ fn byte(evm: *Evm) !void {
 fn shl(evm: *Evm) !void {
     const free_ptr = evm.stack.length;
     if (free_ptr <= 1) return OpcodeErrors.StackUnderflow;
+    try evm.gas.consumeGas(3);
 
     const len = evm.stack.stack[free_ptr - 1];
     const val = evm.stack.stack[free_ptr - 2];
@@ -415,6 +512,7 @@ fn shl(evm: *Evm) !void {
 fn shr(evm: *Evm) !void {
     const free_ptr = evm.stack.length;
     if (free_ptr <= 1) return OpcodeErrors.StackUnderflow;
+    try evm.gas.consumeGas(3);
 
     const len = evm.stack.stack[free_ptr - 1];
     const val = evm.stack.stack[free_ptr - 2];
@@ -431,13 +529,14 @@ fn shr(evm: *Evm) !void {
 fn sar(evm: *Evm) !void {
     const free_ptr = evm.stack.length;
     if (free_ptr <= 1) return OpcodeErrors.StackUnderflow;
+    try evm.gas.consumeGas(3);
 
-    const len = evm.stack.stack[free_ptr - 1];
+    const shift = evm.stack.stack[free_ptr - 1];
     const val = evm.stack.stack[free_ptr - 2];
 
     _ = try evm.stack.pop();
 
-    evm.stack.stack[free_ptr - 1] = @as(u256, @bitCast(@as(i256, @bitCast(len)) >> @truncate(val))) & std.math.maxInt(u256);
+    evm.stack.stack[free_ptr - 1] = @as(u256, @bitCast(@as(i256, @bitCast(shift)) >> @truncate(val))) & std.math.maxInt(u256);
 }
 
 // Crypto: 0x20
